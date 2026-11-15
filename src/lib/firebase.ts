@@ -21,7 +21,7 @@ export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: "select_account" });
 
 // Optional analytics setup
-export let analytics = null;
+export let analytics: any = null;
 if (typeof window !== "undefined") {
   isSupported().then((supported) => {
     if (supported) {
