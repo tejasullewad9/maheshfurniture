@@ -1,10 +1,10 @@
 ﻿"use client";
 import React, { useState, useEffect } from "react";
-import { useAuth } from "@/context/AuthContext"; // or your auth state
 import { db } from "@/lib/firebase";
 import { collection, getDocs, deleteDoc, doc, addDoc } from "firebase/firestore";
+import { Trash2, PlusCircle } from "lucide-react";
+
 export default function AdminPage() {
-  const [isAdmin, setIsAdmin] = useState(true); // Set to true or tie to your auth email
   const [products, setProducts] = useState<any[]>([]);
   const [name, setName] = useState("");
   const [category, setCategory] = useState("bedroom-furniture");
@@ -12,7 +12,6 @@ export default function AdminPage() {
   const [imageUrl, setImageUrl] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Fetch products from Firestore
   const fetchProducts = async () => {
     try {
       const querySnapshot = await getDocs(collection(db, "products"));
@@ -27,7 +26,6 @@ export default function AdminPage() {
     fetchProducts();
   }, []);
 
-  // Handle Adding New Product & Photo URL
   const handleAddProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !imageUrl) {
@@ -56,7 +54,6 @@ export default function AdminPage() {
     }
   };
 
-  // Handle Deleting Product & Photo
   const handleDeleteProduct = async (id: string) => {
     if (!confirm("Are you sure you want to delete this product?")) return;
     try {
@@ -76,7 +73,6 @@ export default function AdminPage() {
         <p className="text-xs text-amber-100">Add new teakwood arrivals or delete old listings instantly from the cloud database.</p>
       </div>
 
-      {/* Add Product Form */}
       <form onSubmit={handleAddProduct} className="rounded-3xl bg-white border border-stone-200 p-6 shadow-xs space-y-4">
         <h2 className="font-serif text-xl font-bold text-stone-900 flex items-center gap-2">
           <PlusCircle className="h-5 w-5 text-[#78350f]" /> Add New Furniture Item & Photo
@@ -142,7 +138,6 @@ export default function AdminPage() {
         </button>
       </form>
 
-      {/* Existing Products List with Delete */}
       <div className="rounded-3xl bg-white border border-stone-200 p-6 shadow-xs space-y-4">
         <h2 className="font-serif text-xl font-bold text-stone-900">Manage Existing Showroom Inventory</h2>
         {products.length === 0 ? (
