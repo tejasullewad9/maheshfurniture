@@ -1,196 +1,167 @@
 ﻿"use client";
-import React, { useState } from "react";
-import Link from "next/link";
-import { Sparkles, BedDouble, Sofa, Frame, Utensils, DoorClosed, Hammer, Package, Trash2, Send, Lock } from "lucide-react";
-import { useFavorites } from "@/context/FavoritesContext";
-import { Product } from "@/types/furniture";
-import { createClient } from "@/lib/supabase/client";
-
-const STUDIO_TABS = [
-  { id: "bedroom-furniture", label: "BED", categoryName: "Beds", icon: BedDouble, defaultImg: "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=1200&q=85" },
-  { id: "sofas", label: "SOFA", categoryName: "Sofas", icon: Sofa, defaultImg: "https://images.unsplash.com/photo-1493663284031-b7e3aefcae8e?auto=format&fit=crop&w=1200&q=85" },
-  { id: "dressing-tables", label: "DRESSING", categoryName: "Dressing Tables", icon: Frame, defaultImg: "https://images.unsplash.com/photo-1595526114035-0d45ed16cfbf?auto=format&fit=crop&w=1200&q=85" },
-  { id: "dining-furniture", label: "DINING", categoryName: "Dining Sets", icon: Utensils, defaultImg: "https://images.unsplash.com/photo-1617806118233-18e1de247200?auto=format&fit=crop&w=1200&q=85" },
-  { id: "doors-and-windows", label: "DOORS", categoryName: "Doors & Windows", icon: DoorClosed, defaultImg: "https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=1200&q=85" },
-  { id: "custom-furniture", label: "CUSTOM", categoryName: "Custom Woodwork", icon: Hammer, defaultImg: "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?auto=format&fit=crop&w=1200&q=85" },
-  { id: "manage", label: "INVENTORY", categoryName: "Manage", icon: Package, defaultImg: "" },
-];
-
-export default function CreatorStudioPage() {
-  const supabase = createClient();
-  const { user, loginWithGoogle, products, addProduct, deleteProduct } = useFavorites();
-  const [activeTab, setActiveTab] = useState("bedroom-furniture");
-
+import React, { useState, useEffect } from "react";
+import { useAuth } from "@/context/AuthContext"; // or your auth state
+import { db } from "@/lib/firebase";
+import { collection, getDocs, deleteDoc, doc, addDoc } from "firebase/firestore";
+export default function AdminPage() {
+  const [isAdmin, setIsAdmin] = useState(true); // Set to true or tie to your auth email
+  const [products, setProducts] = useState<any[]>([]);
   const [name, setName] = useState("");
-  const [material, setMaterial] = useState("Pure Teak Wood");
+  const [category, setCategory] = useState("bedroom-furniture");
+  const [material, setMaterial] = useState("100% Pure Teak Wood");
   const [imageUrl, setImageUrl] = useState("");
-  const [details, setDetails] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  // Owner-Only Guard
-  if (!user || !user.isAdmin) {
-    return (
-      <div className="mx-auto max-w-md px-4 py-14">
-        <div className="rounded-3xl bg-white border border-stone-200/90 p-8 shadow-xs text-center space-y-5">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-100 text-[#78350f]">
-            <Lock className="h-6 w-6" />
-          </div>
-          <div className="space-y-1">
-            <h1 className="font-serif text-xl font-bold text-stone-900">Owner Access Only</h1>
-            <p className="text-xs text-stone-500">
-              Creator Studio is restricted to Mahesh Furniture administration. Sign in with the authorized owner Google account.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={loginWithGoogle}
-            className="w-full rounded-2xl bg-[#78350f] hover:bg-[#451a03] py-3.5 text-xs font-bold text-white shadow-xs cursor-pointer"
-          >
-            Sign In as Owner
-          </button>
-          <Link href="/" className="block text-xs font-semibold text-stone-500 hover:text-stone-800">
-            ← Back to Showroom Feed
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
-  const currentTabObj = STUDIO_TABS.find(t => t.id === activeTab) || STUDIO_TABS[0];
-
-  const handlePublish = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim()) return alert("Enter furniture title");
-
-    const finalImage = imageUrl.trim() || currentTabObj.defaultImg;
-    const newItem: Product = {
-      id: `mf-${Date.now()}`,
-      name: name.trim(),
-      slug: name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-      sku: `MF-${Math.floor(100 + Math.random() * 900)}`,
-      categorySlug: currentTabObj.id,
-      categoryName: currentTabObj.categoryName,
-      shortDescription: details.trim() || `${material} • In-House Bhainsa Workshop`,
-      description: details.trim() || material,
-      material: material.trim() || "Pure Teak Wood",
-      mainImage: finalImage,
-      isFeatured: true,
-      isPublished: true,
-      createdAt: "Just now",
-    };
-
-    addProduct(newItem);
-
+  // Fetch products from Firestore
+  const fetchProducts = async () => {
     try {
-      await supabase.from("products").insert([{
-        name: newItem.name,
-        slug: newItem.slug,
-        sku: newItem.sku,
-        category_slug: newItem.categorySlug,
-        category_name: newItem.categoryName,
-        short_description: newItem.shortDescription,
-        material: newItem.material,
-        main_image: newItem.mainImage,
-      }]);
-    } catch {}
+      const querySnapshot = await getDocs(collection(db, "products"));
+      const list = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setProducts(list);
+    } catch (err) {
+      console.error("Error fetching products:", err);
+    }
+  };
 
-    setName("");
-    setDetails("");
-    setImageUrl("");
-    alert(`Published to ${currentTabObj.categoryName} Feed!`);
+  useEffect(() => {
+    fetchProducts();
+  }, []);
+
+  // Handle Adding New Product & Photo URL
+  const handleAddProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name || !imageUrl) {
+      alert("Please enter a product name and image URL.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await addDoc(collection(db, "products"), {
+        name,
+        categorySlug: category,
+        material,
+        mainImage: imageUrl,
+        createdAt: new Date().toISOString(),
+      });
+      setName("");
+      setImageUrl("");
+      fetchProducts();
+      alert("Product and photo added successfully!");
+    } catch (err) {
+      console.error("Error adding product:", err);
+      alert("Failed to add product.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle Deleting Product & Photo
+  const handleDeleteProduct = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this product?")) return;
+    try {
+      await deleteDoc(doc(db, "products", id));
+      setProducts(products.filter(p => p.id !== id));
+      alert("Product deleted successfully!");
+    } catch (err) {
+      console.error("Error deleting product:", err);
+      alert("Failed to delete product.");
+    }
   };
 
   return (
-    <div className="mx-auto max-w-2xl px-2 sm:px-4 py-6 space-y-5">
-      <div className="rounded-3xl bg-white border border-stone-200/90 p-6 shadow-xs">
-        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100/80 px-3 py-1 text-xs font-semibold text-[#78350f]">
-          <Sparkles className="h-3 w-3" /> Creator Studio
-        </span>
-        <h1 className="font-serif text-2xl font-bold text-stone-900 mt-2">
-          Mahesh Furniture Studio
-        </h1>
+    <div className="mx-auto max-w-4xl px-4 py-8 space-y-8">
+      <div className="rounded-3xl bg-[#78350f] text-white p-6 shadow-md space-y-2">
+        <h1 className="font-serif text-3xl font-bold">Mahesh Furniture Creator Studio</h1>
+        <p className="text-xs text-amber-100">Add new teakwood arrivals or delete old listings instantly from the cloud database.</p>
       </div>
 
-      <div className="rounded-3xl bg-white border border-stone-200/90 p-6 shadow-xs space-y-5">
-        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
-          {STUDIO_TABS.map(tab => {
-            const Icon = tab.icon;
-            const active = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveTab(tab.id)}
-                className={`shrink-0 inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2.5 text-xs font-bold tracking-wide transition-all ${
-                  active
-                    ? "bg-stone-900 text-white shadow-xs"
-                    : "bg-stone-100 text-stone-700 hover:bg-stone-200"
-                }`}
-              >
-                <Icon className="h-3.5 w-3.5" />
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
+      {/* Add Product Form */}
+      <form onSubmit={handleAddProduct} className="rounded-3xl bg-white border border-stone-200 p-6 shadow-xs space-y-4">
+        <h2 className="font-serif text-xl font-bold text-stone-900 flex items-center gap-2">
+          <PlusCircle className="h-5 w-5 text-[#78350f]" /> Add New Furniture Item & Photo
+        </h2>
 
-        {activeTab !== "manage" ? (
-          <form onSubmit={handlePublish} className="space-y-3.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="text-xs font-bold text-stone-700 block mb-1">Product Name</label>
             <input
               type="text"
-              required
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder={`Enter ${currentTabObj.categoryName} title (e.g. Royal Carved Teak ${currentTabObj.label})...`}
-              className="w-full rounded-2xl bg-stone-50 border border-stone-200/90 px-4 py-3 text-xs text-stone-900 focus:bg-white focus:outline-none"
+              placeholder="e.g. Royal Carved Teak Bed"
+              className="w-full rounded-2xl bg-stone-50 border border-stone-200 px-4 py-2.5 text-xs text-stone-900"
+              required
             />
+          </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <input
-                type="text"
-                value={material}
-                onChange={(e) => setMaterial(e.target.value)}
-                placeholder="Wood / Material (e.g. Pure Teak Wood)"
-                className="w-full rounded-2xl bg-stone-50 border border-stone-200/90 px-4 py-3 text-xs text-stone-900 focus:bg-white focus:outline-none"
-              />
-              <input
-                type="url"
-                value={imageUrl}
-                onChange={(e) => setImageUrl(e.target.value)}
-                placeholder="Photo URL (optional - auto uses preset)"
-                className="w-full rounded-2xl bg-stone-50 border border-stone-200/90 px-4 py-3 text-xs text-stone-900 focus:bg-white focus:outline-none"
-              />
-            </div>
-
-            <textarea
-              rows={4}
-              value={details}
-              onChange={(e) => setDetails(e.target.value)}
-              placeholder={`Type specifications, polish shade, or dimensions for ${currentTabObj.categoryName}...`}
-              className="w-full rounded-2xl bg-stone-50 border border-stone-200/90 p-4 text-xs text-stone-900 focus:bg-white focus:outline-none"
-            />
-
-            <button
-              type="submit"
-              className="w-full flex items-center justify-center gap-2 rounded-2xl bg-[#4f46e5] hover:bg-[#4338ca] py-3.5 text-xs font-bold text-white shadow-sm transition-all"
+          <div>
+            <label className="text-xs font-bold text-stone-700 block mb-1">Category</label>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="w-full rounded-2xl bg-stone-50 border border-stone-200 px-4 py-2.5 text-xs text-stone-900"
             >
-              <Send className="h-3.5 w-3.5" /> 🚀 Publish Live to Showroom
-            </button>
-          </form>
+              <option value="bedroom-furniture">Bedroom Furniture</option>
+              <option value="sofas">Sofas & Loungers</option>
+              <option value="dressing-tables">Dressing Tables</option>
+              <option value="dining-furniture">Dining Furniture</option>
+              <option value="doors-and-windows">Doors & Windows</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="text-xs font-bold text-stone-700 block mb-1">Material / Tag</label>
+            <input
+              type="text"
+              value={material}
+              onChange={(e) => setMaterial(e.target.value)}
+              className="w-full rounded-2xl bg-stone-50 border border-stone-200 px-4 py-2.5 text-xs text-stone-900"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-bold text-stone-700 block mb-1">Photo Image URL</label>
+            <input
+              type="url"
+              value={imageUrl}
+              onChange={(e) => setImageUrl(e.target.value)}
+              placeholder="https://example.com/photo.jpg"
+              className="w-full rounded-2xl bg-stone-50 border border-stone-200 px-4 py-2.5 text-xs text-stone-900"
+              required
+            />
+          </div>
+        </div>
+
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full rounded-2xl bg-[#78350f] hover:bg-[#5c280b] py-3 text-xs font-bold text-white shadow-xs transition-all"
+        >
+          {loading ? "Adding Product..." : "Publish Product to Showroom"}
+        </button>
+      </form>
+
+      {/* Existing Products List with Delete */}
+      <div className="rounded-3xl bg-white border border-stone-200 p-6 shadow-xs space-y-4">
+        <h2 className="font-serif text-xl font-bold text-stone-900">Manage Existing Showroom Inventory</h2>
+        {products.length === 0 ? (
+          <p className="text-xs text-stone-500">No custom items in database yet. Add your first item above!</p>
         ) : (
-          <div className="space-y-3">
-            {products.map(item => (
-              <div key={item.id} className="flex items-center justify-between gap-3 rounded-2xl bg-stone-50 border border-stone-200/80 p-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  <img src={item.mainImage} alt={item.name} className="h-12 w-12 rounded-xl object-cover shrink-0 bg-stone-200" />
-                  <div className="truncate">
-                    <span className="text-[10px] font-bold text-[#78350f] uppercase">{item.categoryName}</span>
-                    <h4 className="text-xs font-bold text-stone-900 truncate">{item.name}</h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {products.map((item) => (
+              <div key={item.id} className="flex items-center justify-between p-3 rounded-2xl bg-stone-50 border border-stone-200">
+                <div className="flex items-center gap-3">
+                  <img src={item.mainImage} alt={item.name} className="h-12 w-12 rounded-xl object-cover" />
+                  <div>
+                    <h3 className="text-xs font-bold text-stone-900">{item.name}</h3>
+                    <span className="text-[10px] text-stone-500">{item.material}</span>
                   </div>
                 </div>
                 <button
-                  type="button"
-                  onClick={() => deleteProduct(item.id)}
-                  className="shrink-0 rounded-xl bg-rose-50 hover:bg-rose-100 p-2.5 text-rose-600 transition-colors"
+                  onClick={() => handleDeleteProduct(item.id)}
+                  className="p-2 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100 transition-all"
+                  title="Delete Product"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
